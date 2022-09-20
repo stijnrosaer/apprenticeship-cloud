@@ -8,10 +8,16 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 
+using Azure.Messaging.ServiceBus
+
 namespace Company.Function
 {
     public static class HttpTrigger1
     {
+        static ServiceBusClient client;
+        static ServiceBusSender sender;
+
+
         [FunctionName("HttpTrigger1")]
         public static async Task<IActionResult> Run(
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = null)] HttpRequest req,
@@ -19,12 +25,20 @@ namespace Company.Function
         {
             log.LogInformation("C# HTTP trigger function processed a request.");
 
+            var clientOptions = new ServiceBusClientOptions()
+            {
+                TransportType = ServiceBusTransportType.AmqpWebSockets
+            };
+            client = new ServiceBusClient(Environment.GetEnvironmentVariable("AzureWebJobsServiceBus"), clientOptions);
+            sender = client.CreateSender("serviceque");
 
             string name = req.Query["name"];
 
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
             dynamic data = JsonConvert.DeserializeObject(requestBody);
             name = name ?? data?.name;
+
+            await sender.SendMessageAsync(new ServiceBusMessage(name));
 
             string responseMessage = string.IsNullOrEmpty(name)
                 ? "This HTTP triggered function executed successfully. Pass a name in the query string or in the request body for a personalized response."
